@@ -18,6 +18,7 @@
          oder nur im Haupteintrag erscheinen, wenn = yes
     -->
     <xsl:param name="strictSubHeadIndex">yes</xsl:param>
+    <xsl:param name="withPictures">no</xsl:param>
 
     <!-- Trenner für Schreibungen/Stichworte -->
     <xsl:param name="orthdivider">
@@ -48,12 +49,15 @@
                               * die Untereinträge haben
                               * ohne Untereinträge und selbst kein Untereintrag sind
                               -->
-                            <xsl:apply-templates select="wd:entry[not(./wd:ref[@type='main']) or key('refs',@id)]">
-                                <xsl:sort select="./wd:form/wd:reading/wd:hira/text()"/>
-                            </xsl:apply-templates>
+                            <xsl:for-each select="wd:entry[not(./wd:ref[@type='main']) or key('refs',@id)]">
+                                <xsl:sort select="wd:form/wd:reading/wd:hira/text()"/>
+                                <xsl:apply-templates select="."/>
+                            </xsl:for-each>
                         </xsl:when>
                         <xsl:otherwise>
-                            <xsl:apply-templates/>
+                            <xsl:for-each select="wd:entry">
+                                <xsl:apply-templates/>
+                            </xsl:for-each>
                         </xsl:otherwise>
                     </xsl:choose>
                 </dl>
@@ -62,24 +66,9 @@
     </xsl:template>
 
     <xsl:template match="wd:entry">
-        <xsl:variable name="title">
-            <xsl:choose>
-                <xsl:when test="./wd:form/wd:orth[@midashigo]">
-                    <xsl:apply-templates mode="simple" select="./wd:form/wd:orth[@midashigo]"/>
-                </xsl:when>
-                <xsl:otherwise>
-                    <xsl:if test="./wd:form/wd:orth[not(@irr)]">
-                        <xsl:apply-templates mode="simple"
-                                             select="./wd:form/wd:orth[not(@irr) and not(@midashigo)]"/>
-                    </xsl:if>
-                    <xsl:if test="./wd:form/wd:orth[@irr]">
-                        <xsl:apply-templates mode="simple" select="./wd:form/wd:orth[@irr]"/>
-                    </xsl:if>
-                </xsl:otherwise>
-            </xsl:choose>
-        </xsl:variable>
         <xsl:variable name="yomi">
-            <xsl:value-of select="replace(./wd:form/wd:reading/wd:hira,'う゛','ゔ')"/>
+            <!-- no support for ゔ in JIS-X4081 -->
+            <xsl:value-of select="replace(./wd:form/wd:reading/wd:hira,'ゔ','う゛')"/>
         </xsl:variable>
         <xsl:variable name="extended_yomi">
             <xsl:call-template name="reading_from_extended_yomi"/>
@@ -117,12 +106,25 @@
 
             <xsl:copy-of select="$extended_yomi"/>
             <xsl:copy-of select="$hyouki"/>
+            <!-- accent values -->
+            <xsl:if test="./wd:form/wd:reading/wd:accent">
+                <sub>
+                    <xsl:text>[</xsl:text>
+                    <xsl:for-each select="./wd:form/wd:reading/wd:accent">
+                        <xsl:value-of select="."/>
+                        <xsl:if test="position() lt last()">
+                            <xsl:text>, </xsl:text>
+                        </xsl:if>
+                    </xsl:for-each>
+                    <xsl:text>]</xsl:text>
+                </sub>
+            </xsl:if>
+
         </xsl:element>
 
         <!-- index -->
         <xsl:variable name="idx">
             <xsl:call-template name="build_entry_index">
-                <xsl:with-param name="title" select="$title"/>
                 <xsl:with-param name="yomi" select="$yomi"/>
             </xsl:call-template>
         </xsl:variable>
@@ -148,50 +150,35 @@
             </xsl:if>
             <!-- if only one sense, handle usg in sense template -->
             <xsl:apply-templates select="wd:usg"/>
-            <xsl:choose>
-                <xsl:when test="./wd:sense/wd:sense">
-                    <xsl:if test="position()>1">
-                        <xsl:text> </xsl:text>
-                    </xsl:if>
-                    <xsl:text>[</xsl:text>
-                    <xsl:number format="A" value="position()"/>
-                    <xsl:text>] </xsl:text>
-                    <xsl:call-template name="sense_accent"/>
-                    <xsl:apply-templates/>
-                </xsl:when>
-                <xsl:otherwise>
-                    <xsl:choose>
-                        <xsl:when test="count(./wd:sense[not(@related='true')])>1">
-                            <xsl:for-each select="./wd:sense">
-                                <xsl:if test="following-sibling::wd:sense[not(@related)] or preceding-sibling::wd:sense[not(@related)]">
-                                    <xsl:if test="position()>1">
-                                        <xsl:text> </xsl:text>
-                                    </xsl:if>
-                                    <xsl:text>[</xsl:text>
-                                    <xsl:number count="wd:sense[not(@related)]"/>
-                                    <xsl:text>] </xsl:text>
-                                    <xsl:call-template name="sense_accent"/>
-                                </xsl:if>
-                                <xsl:apply-templates select="."/>
-                            </xsl:for-each>
-                        </xsl:when>
-                        <xsl:otherwise>
-                            <xsl:for-each select="./wd:sense">
-                                <xsl:apply-templates select="."/>
-                            </xsl:for-each>
-                        </xsl:otherwise>
-                    </xsl:choose>
-                </xsl:otherwise>
-            </xsl:choose>
+            <xsl:apply-templates select="wd:sense"/>
+            <xsl:if test="wd:expl">
+                <p>
+                    <xsl:text>(</xsl:text>
+                    <xsl:apply-templates select="wd:expl"/>
+                    <xsl:text>)</xsl:text>
+                </p>
+            </xsl:if>
+
             <xsl:apply-templates select="wd:ref[not(@type='main')]"/>
             <xsl:apply-templates select="wd:link"/>
+            <xsl:apply-templates select="wd:link[@type='URL' or @type='url']"/>
+            <xsl:if test="$withPictures = 'yes'">
+                <xsl:if test="//wd:sense/wd:link[@type='picture']">
+                    <xsl:apply-templates select="//wd:sense/wd:link"/>
+                </xsl:if>
+                <xsl:if test="wd:link[@type='picture']">
+                    <xsl:apply-templates select="wd:link"/>
+                </xsl:if>
+            </xsl:if>
             <xsl:call-template name="entry_subs"/>
-            <xsl:apply-templates mode="global" select="./wd:ref[@type='main']"/>
+            <xsl:if test="./wd:ref[@type='main']">
+                <br/>
+                <xsl:apply-templates mode="global" select="./wd:ref[@type='main']"/>
+            </xsl:if>
         </dd>
     </xsl:template>
 
     <xsl:template name="build_entry_index">
-        <xsl:param name="title"/>
         <xsl:param name="yomi"/>
         <!-- Lesung -->
         <xsl:element name="key">
@@ -223,6 +210,7 @@
 
     <!-- Untereinträge -->
     <xsl:template name="entry_subs">
+        <br/>
         <xsl:variable name="subs" select="key('refs',@id)"/>
         <xsl:if test="$subs">
             <!-- Ableitungen -->
@@ -334,29 +322,18 @@
                                     'DinSP','･'),
                                     '&lt;>/[]1234567890: GrJoDevNinSsuPWap_＿',''),
                                     &quot;・·'’&quot;, '･･￨￨'),
-                                    'う゛','ゔ')
+                                    'ゔ','う゛')
                                 "/>
         </xsl:variable>
 
         <xsl:choose>
             <xsl:when test="./wd:form/wd:reading/wd:accent">
                 <xsl:for-each select="./wd:form/wd:reading/wd:accent">
-                    <xsl:choose>
-                        <xsl:when test="position() = 1">
-                            <span class="pron accent" data-accent-id="{position()}">
-                                <xsl:call-template name="call_mark_accent">
-                                    <xsl:with-param name="yomi" select="$yomi"/>
-                                </xsl:call-template>
-                            </span>
-                        </xsl:when>
-                        <xsl:otherwise>
-                            <span class="pron accent hidden" data-accent-id="{position()}">
-                                <xsl:call-template name="call_mark_accent">
-                                    <xsl:with-param name="yomi" select="$yomi"/>
-                                </xsl:call-template>
-                            </span>
-                        </xsl:otherwise>
-                    </xsl:choose>
+                    <xsl:if test="position() = 1">
+                        <xsl:call-template name="call_mark_accent">
+                            <xsl:with-param name="yomi" select="$yomi"/>
+                        </xsl:call-template>
+                    </xsl:if>
                 </xsl:for-each>
             </xsl:when>
             <xsl:otherwise>
@@ -581,16 +558,22 @@
 
     <xsl:template name="sense_accent">
         <xsl:if test="./wd:accent">
-            <xsl:for-each select="./wd:accent">
-                <xsl:value-of select="."/>
-            </xsl:for-each>
+            <sub>
+                <xsl:text>[</xsl:text>
+                <xsl:for-each select="./wd:accent">
+                    <xsl:value-of select="."/>
+                    <xsl:if test="position() lt last()">
+                        <xsl:text>, </xsl:text>
+                    </xsl:if>
+                </xsl:for-each>
+                <xsl:text>]</xsl:text>
+            </sub>
             <xsl:text> </xsl:text>
         </xsl:if>
     </xsl:template>
 
     <!-- subentry -->
     <xsl:template mode="subentry" match="wd:entry">
-        <br/>
         <xsl:variable name="title">
             <xsl:call-template name="get_subentry_title"/>
         </xsl:variable>
@@ -601,7 +584,7 @@
                 <rb>
                     <xsl:choose>
                         <xsl:when test="key('refs', @id)">
-                            <a href="x-dictionary:r:{@id}">
+                            <a href="#{@id}">
                                 <xsl:copy-of select="$title"/>
                             </a>
                         </xsl:when>
@@ -788,25 +771,25 @@
     </xsl:template>
 
     <!-- Mastersense -->
-    <xsl:template match="wd:sense[./wd:sense]">
+    <xsl:template match="wd:sense[not(empty(./wd:sense))]">
+        <xsl:text>[</xsl:text>
+        <xsl:number format="A" value="position()"/>
+        <xsl:text>] </xsl:text>
         <xsl:call-template name="sense_accent"/>
         <xsl:apply-templates select="./wd:descr"/>
-        <xsl:choose>
-            <xsl:when test="count(./wd:sense[not(@related)])>1">
-                <xsl:for-each select="./wd:sense">
-                    <xsl:apply-templates select="."/>
-                </xsl:for-each>
-            </xsl:when>
-            <xsl:otherwise>
-                <xsl:apply-templates select="./wd:sense"/>
-            </xsl:otherwise>
-        </xsl:choose>
+        <p>
+            <xsl:apply-templates select="./wd:sense"/>
+        </p>
     </xsl:template>
 
     <!--
     Senses ohne Mastersense und nicht @related
     -->
     <xsl:template match="wd:sense[empty(./wd:sense) and not(@related)]">
+        <xsl:if test="following-sibling::wd:sense[not(@related)] or preceding-sibling::wd:sense[not(@related)]">
+            <xsl:number count="wd:sense[not(@related)]"/>
+            <xsl:text>) </xsl:text>
+        </xsl:if>
         <xsl:choose>
             <xsl:when test="following-sibling::wd:sense[1][@related]">
                 <xsl:variable name="this_sense" select="."/>
@@ -826,6 +809,7 @@
                 <xsl:apply-templates mode="core" select="."/>
             </xsl:otherwise>
         </xsl:choose>
+        <br/>
     </xsl:template>
 
     <xsl:template match="wd:sense[empty(./wd:sense) and @related]"/>
@@ -837,7 +821,7 @@
         <xsl:if test="@related">
             <xsl:value-of select="$relationDivider"/>
         </xsl:if>
-        
+
         <xsl:choose>
             <xsl:when test="not(empty(wd:bracket))">
                 <xsl:apply-templates/>
@@ -1011,75 +995,84 @@
         <xsl:text>”</xsl:text>
     </xsl:template>
 
-    <xsl:template match="wd:usg">
-        <xsl:choose>
-            <xsl:when test="@type='dom'">
-                <xsl:text>{</xsl:text>
-                <xsl:apply-templates/>
-                <xsl:call-template name="usg_after"/>
-                <xsl:text>} </xsl:text>
-            </xsl:when>
-            <xsl:when test="@type='time'">
-                <xsl:text>(</xsl:text>
-                <xsl:value-of select="."/>
-                <xsl:call-template name="usg_after"/>
-                <xsl:text>) </xsl:text>
-            </xsl:when>
-            <xsl:when test="@reg='lit'">
-                <xsl:text>(</xsl:text>
-                <xsl:text>schriftspr.</xsl:text>
-                <xsl:call-template name="usg_after"/>
-                <xsl:text>) </xsl:text>
-            </xsl:when>
-            <xsl:when test="@reg='coll'">
-                <xsl:text>(</xsl:text>
-                <xsl:text>ugs.</xsl:text>
-                <xsl:call-template name="usg_after"/>
-                <xsl:text>) </xsl:text>
-            </xsl:when>
-            <xsl:when test="@reg='vulg'">
-                <xsl:text>(</xsl:text>
-                <xsl:text>vulg.</xsl:text>
-                <xsl:call-template name="usg_after"/>
-                <xsl:text>) </xsl:text>
-            </xsl:when>
-            <xsl:when test="@type='hint'">
-                <xsl:choose>
-                    <xsl:when test="text()='rel.'"/>
-                    <xsl:otherwise>
-                        <xsl:text>(</xsl:text>
-                            <xsl:apply-templates/>
-                            <xsl:call-template name="usg_after"/>
-                        <xsl:text>) </xsl:text>
-                    </xsl:otherwise>
-                </xsl:choose>
-            </xsl:when>
-            <xsl:otherwise>
-                <xsl:choose>
-                    <xsl:when test="@reg">
-                        <xsl:text>(</xsl:text>
-                        <xsl:value-of select="@reg"/>
-                        <xsl:if test="lower-case(@reg)=@reg and not(ends-with(@reg,'.'))">
-                            <xsl:text>.</xsl:text>
-                        </xsl:if>
-                        <xsl:call-template name="usg_after"/>
-                        <xsl:text>) </xsl:text>
-                    </xsl:when>
-                    <xsl:otherwise>
-                        <xsl:text>(</xsl:text>
-                        <xsl:value-of select="."/>
-                        <xsl:text>) </xsl:text>
-                    </xsl:otherwise>
-                </xsl:choose>
-            </xsl:otherwise>
-        </xsl:choose>
+    <xsl:template match="wd:usg[@type='dom']">
+        <xsl:if test="not(preceding-sibling::wd:usg[@type=./@type])">
+            <xsl:text>{</xsl:text>
+        </xsl:if>
+        <xsl:apply-templates/>
+        <xsl:call-template name="usg_tail">
+            <xsl:with-param name="closing" select="'}'"/>
+            <xsl:with-param name="test" select="following-sibling::wd:usg[@type=./@type]"/>
+        </xsl:call-template>
     </xsl:template>
 
-    <!-- Einfügen von Leerzeichen bzw. Komma, wenn gleiches usg-Element folgt. -->
-    <xsl:template name="usg_after">
-        <xsl:if test="following-sibling::wd:usg[@type=./@type or @reg and ./@reg]">
-            <xsl:text>, </xsl:text>
+    <xsl:template match="wd:usg[@type='time']">
+        <xsl:if test="not(preceding-sibling::wd:usg[@type=./@type])">
+            <xsl:text>(</xsl:text>
         </xsl:if>
+        <xsl:apply-templates/>
+        <xsl:call-template name="usg_tail">
+            <xsl:with-param name="closing" select="')'"/>
+            <xsl:with-param name="test" select="following-sibling::wd:usg[@type=./@type]"/>
+        </xsl:call-template>
+    </xsl:template>
+
+    <xsl:template match="wd:usg[@type='hint']">
+        <xsl:if test="not(preceding-sibling::wd:usg[@type=./@type])">
+            <xsl:text>(</xsl:text>
+        </xsl:if>
+        <xsl:choose>
+            <xsl:when test="text()='rel.'"/>
+            <xsl:otherwise>
+                <xsl:apply-templates/>
+            </xsl:otherwise>
+        </xsl:choose>
+        <xsl:call-template name="usg_tail">
+            <xsl:with-param name="closing" select="')'"/>
+            <xsl:with-param name="test" select="following-sibling::wd:usg[@type=./@type]"/>
+        </xsl:call-template>
+    </xsl:template>
+    
+    <xsl:template match="wd:usg[@reg]">
+        <xsl:if test="not(preceding-sibling::wd:usg[@reg])">
+            <xsl:text>(</xsl:text>
+        </xsl:if>
+        <xsl:choose>
+            <xsl:when test="@reg='lit'">
+                <xsl:text>schriftspr.</xsl:text>
+            </xsl:when>
+            <xsl:when test="@reg='coll'">
+                <xsl:text>ugs.</xsl:text>
+            </xsl:when>
+            <xsl:when test="@reg='vulg'">
+                <xsl:text>vulg.</xsl:text>
+            </xsl:when>
+            <xsl:otherwise>
+                <xsl:value-of select="."/>
+            </xsl:otherwise>
+        </xsl:choose>
+        <xsl:call-template name="usg_tail">
+            <xsl:with-param name="closing" select="')'"/>
+            <xsl:with-param name="test" select="following-sibling::wd:usg[@reg]"/>
+        </xsl:call-template>
+    </xsl:template>
+
+    <!--
+    depending on condition $test append comma + space or $closing + space
+    if $test = true append comma + space else append $closing + space
+    -->
+    <xsl:template name="usg_tail">
+        <xsl:param name="test"/>
+        <xsl:param name="closing"/>
+        <xsl:choose>
+            <xsl:when test="$test">
+                <xsl:text>, </xsl:text>
+            </xsl:when>
+            <xsl:otherwise>
+                <xsl:value-of select="$closing"/>
+                <xsl:text> </xsl:text>
+            </xsl:otherwise>
+        </xsl:choose>
     </xsl:template>
 
     <xsl:template match="wd:ref" mode="global">
@@ -1240,6 +1233,21 @@
             <xsl:text>; </xsl:text>
         </xsl:if>
     </xsl:template>
+
+    <!--
+    typography
+    -->
+
+    <xsl:template match="wd:jap">
+        <!-- always use HALFWIDTH KATAKANA MIDDLE DOT -->
+        <xsl:value-of select="translate(., '・', '･')"/>
+    </xsl:template>
+
+    <xsl:template match="wd:transcr/wd:*">
+        <!-- always use MIDDLE DOT -->
+        <xsl:value-of select="translate(., '・･', '·')"/>
+    </xsl:template>
+
 
     <xsl:template match="wd:*">
         <xsl:apply-templates/>
