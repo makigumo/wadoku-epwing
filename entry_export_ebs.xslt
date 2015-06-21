@@ -160,7 +160,6 @@
             </xsl:if>
 
             <xsl:apply-templates select="wd:ref[not(@type='main')]"/>
-            <xsl:apply-templates select="wd:link"/>
             <xsl:apply-templates select="wd:link[@type='URL' or @type='url']"/>
             <xsl:if test="$withPictures = 'yes'">
                 <xsl:if test="//wd:sense/wd:link[@type='picture']">
@@ -1245,7 +1244,7 @@
 
     <xsl:template match="wd:transcr/wd:*">
         <!-- always use MIDDLE DOT -->
-        <xsl:value-of select="translate(., '・･', '·')"/>
+        <xsl:value-of select="translate(., '・･', '··')"/>
     </xsl:template>
 
 
