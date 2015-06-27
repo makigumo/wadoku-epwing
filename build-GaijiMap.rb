@@ -2,7 +2,7 @@
 
 require 'set'
 
-default = <<-EOS
+$default = <<-EOS
 <?xml version="1.0" encoding="Shift_JIS"?>
 <gaijiSet>
 
@@ -298,32 +298,58 @@ default = <<-EOS
   
 EOS
 
-
-entities = SortedSet.new
-default_entities = Set.new
-
-default.scan(/#x([0-9A-Fa-f]+)/) do |m|
-  integer = Integer("0x#{m[0]}")
-  default_entities.add integer
-end
-
-f = File.open('wadoku-ebs-sjis.html', 'r:SJIS:UTF-8')
-r = f.read
-r.each_line do |line|
-  line.scan(/&#x([0-9A-Fa-f]+)/) do |m|
+def get_default_entities
+  default_entities = Hash.new
+  $default.scan(/"#x([0-9A-Fa-f]+)"\s+ebcode="(?:[0-9a-fA-F]*)"(?:(?:\s+alt=")([^"]+)?(?:"))?/) do |m|
     integer = Integer("0x#{m[0]}")
-    entities.add integer unless default_entities.include?(integer)
+    if m[1]
+      default_entities[integer] = m[1]
+    else
+      default_entities[integer] = ''
+    end
   end
-end
-f.close
-
-
-print default
-
-start_ebcode = Integer('0xA370')
-
-entities.each_with_index do |e, i|
-  print "  <gaijiMap unicode=\"#x#{'%04x' % e}\" ebcode=\"#{'%04x' % (start_ebcode + i)}\"/>\n"
+  default_entities
 end
 
-print '</gaijiSet>'
+def save_unicode_alt_table(entities)
+  f = File.open('unicode_alt_table.tab', 'w:UTF-8')
+  entities.each do |e|
+    if $default_entities.include?(e)
+      f.puts "#{[e].pack('U')}\t#{e}\t#{$default_entities[e]}"
+    else
+      f.puts "#{[e].pack('U')}\t#{e}"
+    end
+  end
+  f.close
+end
+
+def save_gaji_map_xml(entities)
+  start_ebcode = Integer('0xB100')
+  f = File.open('GaijiMap.xml', 'w:UTF-8')
+  f.print $default
+  entities.each_with_index do |e, i|
+    f.print "  <gaijiMap unicode=\"#x#{'%04x' % e}\" ebcode=\"#{'%04x' % (start_ebcode + i)}\"/>\n" unless $default_entities.include?(e)
+  end
+  f.print '</gaijiSet>'
+  f.close
+end
+
+def read_entities_from_source
+  entities = SortedSet.new
+  f = File.open('wadoku-ebs-sjis.html', 'r:SJIS:UTF-8')
+  r = f.read
+  r.each_line do |line|
+    line.scan(/&#x([0-9A-Fa-f]+)/) do |m|
+      integer = Integer("0x#{m[0]}")
+      entities.add integer
+    end
+  end
+  f.close
+  entities
+end
+
+$default_entities = get_default_entities
+entities = read_entities_from_source
+
+save_unicode_alt_table(entities)
+save_gaji_map_xml(entities)

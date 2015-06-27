@@ -646,11 +646,13 @@
     </xsl:template>
 
     <xsl:template name="get_subentry_type">
+        <xsl:if test="position()=1">
+            <br/>
+        </xsl:if>
         <xsl:choose>
             <xsl:when test="wd:ref[@subentrytype='head']">
                 <xsl:if test="position()=1">
                     <xsl:text>►</xsl:text>
-                    <br/>
                 </xsl:if>
                 <xsl:text>　</xsl:text>
             </xsl:when>
