@@ -740,7 +740,10 @@
                 <xsl:variable name="this_sense" select="."/>
                 <xsl:call-template name="sense_content"/>
                 <xsl:for-each
-                        select="following-sibling::wd:sense[@related and preceding-sibling::wd:sense=$this_sense]">
+                        select="following-sibling::wd:sense[
+                                @related and (
+                                preceding-sibling::wd:sense[1]=$this_sense or preceding-sibling::wd:sense[1][@related])
+                                ]">
                     <xsl:call-template name="sense_content"/>
                 </xsl:for-each>
             </xsl:when>
@@ -798,7 +801,10 @@
                 <xsl:apply-templates select="./wd:descr"/>
                 <xsl:apply-templates mode="core" select="."/>
                 <xsl:for-each
-                        select="following-sibling::wd:sense[@related and preceding-sibling::wd:sense=$this_sense]">
+                        select="following-sibling::wd:sense[
+                                @related and (
+                                preceding-sibling::wd:sense[1]=$this_sense or preceding-sibling::wd:sense[1][@related])
+                                ]">
                     <xsl:call-template name="sense_accent"/>
                     <xsl:apply-templates select="./wd:descr"/>
                     <xsl:apply-templates mode="core" select="."/>
